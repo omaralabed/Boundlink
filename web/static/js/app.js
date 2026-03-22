@@ -49,9 +49,13 @@ class BondlinkDashboard {
         };
         
         this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'update') {
-                this.handleRealtimeUpdate(data);
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'update') {
+                    this.handleRealtimeUpdate(data);
+                }
+            } catch (e) {
+                console.warn('Received non-JSON WebSocket message:', event.data);
             }
         };
         
@@ -108,7 +112,8 @@ class BondlinkDashboard {
             const response = await fetch('/api/interfaces');
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            this.renderInterfaces(data.interfaces);
+            // Guard: API may return an object without the interfaces key
+            if (Array.isArray(data.interfaces)) this.renderInterfaces(data.interfaces);
         } catch (error) {
             console.error('Error fetching interfaces:', error);
         }
@@ -133,8 +138,8 @@ class BondlinkDashboard {
     }
     
     updateTotalBandwidth(bandwidth) {
-        const uploadMbps = bandwidth.upload_mbps.toFixed(2);
-        const downloadMbps = bandwidth.download_mbps.toFixed(2);
+        const uploadMbps   = (bandwidth.upload_mbps   ?? 0).toFixed(2);
+        const downloadMbps = (bandwidth.download_mbps ?? 0).toFixed(2);
         
         const upEl   = document.getElementById('totalUpload');
         const downEl = document.getElementById('totalDownload');
@@ -334,22 +339,22 @@ class BondlinkDashboard {
             <div class="interface-body">
                 <div class="interface-info-row">
                     <span class="info-label">Status</span>
-                    <span class="health-status ${healthStatus}" id="${safeName}-health">
+                    <span class="health-status ${healthStatus}" id="${iface.name}-health">
                         <span class="health-dot"></span>
                         ${healthStatus.toUpperCase()}
                     </span>
                 </div>
                 <div class="interface-info-row">
                     <span class="info-label">IP Address</span>
-                    <span class="info-value" id="${safeName}-ip">${this._escapeHtml(iface.ip_address || 'N/A')}</span>
+                    <span class="info-value" id="${iface.name}-ip">${this._escapeHtml(iface.ip_address || 'N/A')}</span>
                 </div>
                 <div class="interface-info-row">
                     <span class="info-label">Latency</span>
-                    <span class="info-value" id="${safeName}-latency">${iface.health.latency_ms.toFixed(0)} ms</span>
+                    <span class="info-value" id="${iface.name}-latency">${iface.health.latency_ms.toFixed(0)} ms</span>
                 </div>
                 <div class="interface-info-row">
                     <span class="info-label">Packet Loss</span>
-                    <span class="info-value" id="${safeName}-loss">${iface.health.packet_loss.toFixed(1)}%</span>
+                    <span class="info-value" id="${iface.name}-loss">${iface.health.packet_loss.toFixed(1)}%</span>
                 </div>
             </div>
 
@@ -358,14 +363,14 @@ class BondlinkDashboard {
                 <div class="speed-values">
                     <div class="speed-item">
                         <div class="speed-item-label">Upload</div>
-                        <div class="speed-item-value upload" id="${safeName}-upload">${iface.stats.send_rate_mbps.toFixed(2)} Mbps</div>
+                        <div class="speed-item-value upload" id="${iface.name}-upload">${iface.stats.send_rate_mbps.toFixed(2)} Mbps</div>
                     </div>
                     <div class="speed-item">
                         <div class="speed-item-label">Download</div>
-                        <div class="speed-item-value download" id="${safeName}-download">${iface.stats.recv_rate_mbps.toFixed(2)} Mbps</div>
+                        <div class="speed-item-value download" id="${iface.name}-download">${iface.stats.recv_rate_mbps.toFixed(2)} Mbps</div>
                     </div>
                 </div>
-                <canvas id="chart-${safeName}" width="300" height="80"></canvas>
+                <canvas id="chart-${iface.name}" width="300" height="80"></canvas>
             </div>
         `;
 
@@ -427,7 +432,7 @@ class BondlinkDashboard {
     async toggleInterface(name, enabled) {
         try {
             const endpoint = enabled ? 'enable' : 'disable';
-            const response = await fetch(`/api/interfaces/${name}/${endpoint}`, {
+            const response = await fetch(`/api/interfaces/${encodeURIComponent(name)}/${endpoint}`, {
                 method: 'POST'
             });
             
