@@ -24,6 +24,9 @@ class BondlinkDashboard {
     }
 
     init() {
+        // Prevent double-init (e.g. if called twice by accident)
+        if (this._pollInterval) return;
+
         // setupCharts needs the canvas elements — called here, after DOM is ready
         this.setupCharts();
         this.setupWebSocket();
@@ -166,8 +169,8 @@ class BondlinkDashboard {
     }
     
     updateCharts() {
-        this.drawChart(this.uploadChart,   this.uploadHistory,   '#7AC943', '#68B336');
-        this.drawChart(this.downloadChart, this.downloadHistory, '#FF6B35', '#E85A2B');
+        if (this.uploadChart)   this.drawChart(this.uploadChart,   this.uploadHistory,   '#7AC943', '#68B336');
+        if (this.downloadChart) this.drawChart(this.downloadChart, this.downloadHistory, '#FF6B35', '#E85A2B');
     }
 
     // Two-color area chart for the global bandwidth cards
@@ -249,9 +252,17 @@ class BondlinkDashboard {
     
     renderInterfaces(interfaces) {
         const grid = document.getElementById('interfacesGrid');
+        if (!grid) return;
 
         let totalPacketsSent = 0;
         let totalPacketsRecv = 0;
+
+        const incomingNames = new Set(interfaces.map(iface => iface.name));
+
+        // Remove cards for interfaces that are no longer reported by the server
+        [...grid.querySelectorAll('[data-iface-name]')].forEach(card => {
+            if (!incomingNames.has(card.dataset.ifaceName)) card.remove();
+        });
 
         interfaces.forEach(iface => {
             totalPacketsSent += iface.stats.packets_sent;
@@ -287,8 +298,13 @@ class BondlinkDashboard {
         const card = document.createElement('div');
         card.className = `interface-card ${iface.enabled ? 'active' : ''}`;
         card.id = `interface-${iface.name}`;
+        card.dataset.ifaceName = iface.name;   // used by stale-card cleanup in renderInterfaces
 
         const healthStatus = this._healthClass(iface);
+        // Escape name for safe use in HTML text content and in the onchange attribute
+        const safeName = this._escapeHtml(iface.name);
+        // Escape for insertion into a JS string attribute (the onchange handler)
+        const safeNameJs = iface.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
         card.innerHTML = `
             <div class="interface-header">
@@ -304,13 +320,13 @@ class BondlinkDashboard {
                         </svg>
                     </div>
                     <div class="interface-title-info">
-                        <h3>${iface.name}</h3>
-                        <div class="interface-subtitle">${iface.interface}</div>
+                        <h3>${safeName}</h3>
+                        <div class="interface-subtitle">${this._escapeHtml(iface.interface)}</div>
                     </div>
                 </div>
                 <label class="toggle-switch">
                     <input type="checkbox" ${iface.enabled ? 'checked' : ''}
-                           onchange="dashboard.toggleInterface('${iface.name}', this.checked)">
+                           onchange="dashboard.toggleInterface('${safeNameJs}', this.checked)">
                     <span class="toggle-slider"></span>
                 </label>
             </div>
@@ -318,22 +334,22 @@ class BondlinkDashboard {
             <div class="interface-body">
                 <div class="interface-info-row">
                     <span class="info-label">Status</span>
-                    <span class="health-status ${healthStatus}" id="${iface.name}-health">
+                    <span class="health-status ${healthStatus}" id="${safeName}-health">
                         <span class="health-dot"></span>
                         ${healthStatus.toUpperCase()}
                     </span>
                 </div>
                 <div class="interface-info-row">
                     <span class="info-label">IP Address</span>
-                    <span class="info-value" id="${iface.name}-ip">${iface.ip_address || 'N/A'}</span>
+                    <span class="info-value" id="${safeName}-ip">${this._escapeHtml(iface.ip_address || 'N/A')}</span>
                 </div>
                 <div class="interface-info-row">
                     <span class="info-label">Latency</span>
-                    <span class="info-value" id="${iface.name}-latency">${iface.health.latency_ms.toFixed(0)} ms</span>
+                    <span class="info-value" id="${safeName}-latency">${iface.health.latency_ms.toFixed(0)} ms</span>
                 </div>
                 <div class="interface-info-row">
                     <span class="info-label">Packet Loss</span>
-                    <span class="info-value" id="${iface.name}-loss">${iface.health.packet_loss.toFixed(1)}%</span>
+                    <span class="info-value" id="${safeName}-loss">${iface.health.packet_loss.toFixed(1)}%</span>
                 </div>
             </div>
 
@@ -342,18 +358,25 @@ class BondlinkDashboard {
                 <div class="speed-values">
                     <div class="speed-item">
                         <div class="speed-item-label">Upload</div>
-                        <div class="speed-item-value upload" id="${iface.name}-upload">${iface.stats.send_rate_mbps.toFixed(2)} Mbps</div>
+                        <div class="speed-item-value upload" id="${safeName}-upload">${iface.stats.send_rate_mbps.toFixed(2)} Mbps</div>
                     </div>
                     <div class="speed-item">
                         <div class="speed-item-label">Download</div>
-                        <div class="speed-item-value download" id="${iface.name}-download">${iface.stats.recv_rate_mbps.toFixed(2)} Mbps</div>
+                        <div class="speed-item-value download" id="${safeName}-download">${iface.stats.recv_rate_mbps.toFixed(2)} Mbps</div>
                     </div>
                 </div>
-                <canvas id="chart-${iface.name}" width="300" height="80"></canvas>
+                <canvas id="chart-${safeName}" width="300" height="80"></canvas>
             </div>
         `;
 
         return card;
+    }
+
+    // Simple HTML-escape helper (same trick as server's escapeHtml)
+    _escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
     }
 
     updateSingleInterfaceCard(iface) {
@@ -414,8 +437,10 @@ class BondlinkDashboard {
                 await Promise.all([this.fetchInterfaces(), this.fetchStatus()]);
             } else {
                 console.error(`Failed to ${endpoint} interface ${name}`);
-                // Revert toggle
-                const checkbox = document.querySelector(`#interface-${name} input[type="checkbox"]`);
+                // Revert toggle — look up card by data attribute, not CSS id selector,
+                // so names with special characters don't break querySelector
+                const card = document.querySelector(`[data-iface-name="${CSS.escape(name)}"]`);
+                const checkbox = card ? card.querySelector('input[type="checkbox"]') : null;
                 if (checkbox) checkbox.checked = !enabled;
             }
         } catch (error) {
