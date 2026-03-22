@@ -322,11 +322,19 @@ class TunnelManager:
             interface_name: Interface name
             
         Returns:
-            Authentication packet bytes
+            Authentication packet bytes (336 bytes total)
         """
-        # Packet format: AUTH|<interface_name>|<auth_token>
-        auth_data = f"AUTH|{interface_name}|{self.server_config.auth_token}"
-        return auth_data.encode('utf-8')
+        # Get client info
+        client_name = self.config.client.name if hasattr(self.config, 'client') else "Bondlink Router"
+        location = self.config.client.location if hasattr(self.config, 'client') else ""
+        
+        # Build packet: token (64) + wan_interface (16) + client_name (128) + location (128)
+        token_bytes = self.server_config.auth_token.ljust(64, '\x00').encode('utf-8')[:64]
+        wan_bytes = interface_name.ljust(16, '\x00').encode('utf-8')[:16]
+        name_bytes = client_name.ljust(128, '\x00').encode('utf-8')[:128]
+        location_bytes = location.ljust(128, '\x00').encode('utf-8')[:128]
+        
+        return token_bytes + wan_bytes + name_bytes + location_bytes
     
     async def _tunnel_io_loop(self, name: str) -> None:
         """Tunnel I/O loop for handling data

@@ -1,6 +1,12 @@
 # Bondlink Client Configuration
 # Production-ready multi-WAN bonding router
 
+# Client identification
+client:
+  name: "My Office Router"  # User-friendly name shown on server dashboard
+  location: "Main Office"   # Optional location description
+  # Note: The server identifies you by auth_token, but displays this name
+
 # Server connection settings
 server:
   host: "YOUR_VPS_IP"  # Replace with your VPS IP

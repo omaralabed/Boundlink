@@ -8,6 +8,13 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class ClientConfig:
+    """Client identification configuration"""
+    name: str = "Bondlink Router"
+    location: str = ""
+
+
+@dataclass
 class ServerConfig:
     """Server connection configuration"""
     host: str
@@ -148,6 +155,7 @@ class Config:
             self._raw_config = yaml.safe_load(f)
             
         # Parse configuration sections
+        self.client = self._parse_client()
         self.server = self._parse_server()
         self.wan_interfaces = self._parse_wan_interfaces()
         self.lan_interfaces = self._parse_lan_interfaces()
@@ -157,7 +165,15 @@ class Config:
         self.logging = self._parse_logging()
         self.monitoring = self._parse_monitoring()
         self.system = self._parse_system()
-        
+    
+    def _parse_client(self) -> ClientConfig:
+        """Parse client identification configuration"""
+        client = self._raw_config.get("client", {})
+        return ClientConfig(
+            name=client.get("name", "Bondlink Router"),
+            location=client.get("location", ""),
+        )
+    
     def _parse_server(self) -> ServerConfig:
         """Parse server configuration"""
         server = self._raw_config.get("server", {})
