@@ -1,0 +1,27 @@
+[Unit]
+Description=Bondlink Client - Multi-WAN Bonding Router
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/bondlink
+ExecStart=/usr/local/bin/bondlink-daemon -c /etc/bondlink/client.yaml
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=false
+ProtectHome=true
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

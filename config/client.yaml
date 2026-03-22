@@ -1,0 +1,125 @@
+# Bondlink Client Configuration
+# Production-ready multi-WAN bonding router
+
+# Server connection settings
+server:
+  host: "YOUR_VPS_IP"  # Replace with your VPS IP
+  port: 8443
+  auth_token: "CHANGE_ME_GENERATE_SECURE_TOKEN"  # Generate with: openssl rand -hex 32
+  
+  # Connection timeout and retry settings
+  connect_timeout: 10
+  reconnect_interval: 5
+  max_reconnect_attempts: 0  # 0 = infinite
+
+# WAN interface configuration (4 WAN ports)
+wan_interfaces:
+  - name: "wan1"
+    interface: "enp1s0"  # Adjust to your actual interface names
+    priority: 1
+    weight: 1.0  # Load balancing weight
+    enabled: true
+    
+  - name: "wan2"
+    interface: "enp2s0"
+    priority: 2
+    weight: 1.0
+    enabled: true
+    
+  - name: "wan3"
+    interface: "enp3s0"
+    priority: 3
+    weight: 1.0
+    enabled: true
+    
+  - name: "wan4"
+    interface: "enp4s0"
+    priority: 4
+    weight: 1.0
+    enabled: true
+
+# LAN interface configuration (4 LAN ports)
+lan_interfaces:
+  - name: "lan1"
+    interface: "enp5s0"  # Adjust to your actual interface names
+    ip: "192.168.1.1"
+    netmask: "255.255.255.0"
+    dhcp_enabled: true
+    dhcp_range_start: "192.168.1.100"
+    dhcp_range_end: "192.168.1.200"
+    
+  - name: "lan2"
+    interface: "enp6s0"
+    ip: "192.168.2.1"
+    netmask: "255.255.255.0"
+    dhcp_enabled: false
+    
+  - name: "lan3"
+    interface: "enp7s0"
+    ip: "192.168.3.1"
+    netmask: "255.255.255.0"
+    dhcp_enabled: false
+    
+  - name: "lan4"
+    interface: "enp8s0"
+    ip: "192.168.4.1"
+    netmask: "255.255.255.0"
+    dhcp_enabled: false
+
+# Health check configuration
+health_check:
+  enabled: true
+  interval: 5  # seconds
+  timeout: 3
+  failure_threshold: 3  # consecutive failures before marking WAN as down
+  recovery_threshold: 2  # consecutive successes before marking WAN as up
+  
+  # Ping targets for each WAN
+  ping_targets:
+    - "8.8.8.8"
+    - "1.1.1.1"
+    - "208.67.222.222"
+
+# Traffic distribution
+traffic:
+  mode: "round_robin"  # Options: round_robin, weighted, latency_based, adaptive
+  packet_reordering: true  # Enable TCP packet reordering buffer
+  reorder_buffer_size: 1000  # packets
+  
+  # Failover settings
+  failover_enabled: true
+  failover_delay: 2  # seconds before switching to backup WAN
+
+# Tunnel settings
+tunnel:
+  protocol: "udp"  # udp or tcp
+  mtu: 1400
+  encryption: true
+  compression: false  # Enable if bandwidth is limited
+  
+  # Per-tunnel buffer settings
+  send_buffer_size: 2097152  # 2MB
+  recv_buffer_size: 2097152  # 2MB
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file: "/var/log/bondlink/client.log"
+  max_size_mb: 100
+  backup_count: 5
+  console: true
+  format: "json"  # json or text
+
+# Monitoring
+monitoring:
+  prometheus_enabled: true
+  prometheus_port: 9090
+  stats_interval: 10  # seconds
+  web_ui_port: 80  # Standard HTTP port (no port number needed in URL)
+  
+# System settings
+system:
+  run_as_user: "root"  # Required for network configuration
+  pid_file: "/var/run/bondlink/client.pid"
+  enable_forwarding: true
+  enable_masquerading: true
