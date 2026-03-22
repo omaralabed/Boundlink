@@ -109,15 +109,11 @@ class BondlinkDashboard {
     updateSystemStatus(connected) {
         const statusBadge = document.getElementById('systemStatus');
         if (connected) {
-            statusBadge.innerHTML = '<span class="status-dot"></span><span>Connected</span>';
-            statusBadge.style.background = 'rgba(16, 185, 129, 0.1)';
-            statusBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-            statusBadge.style.color = '#10b981';
+            statusBadge.className = 'status-badge connected';
+            statusBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Connected</span>';
         } else {
-            statusBadge.innerHTML = '<span class="status-dot"></span><span>Disconnected</span>';
-            statusBadge.style.background = 'rgba(239, 68, 68, 0.1)';
-            statusBadge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-            statusBadge.style.color = '#ef4444';
+            statusBadge.className = 'status-badge disconnected';
+            statusBadge.innerHTML = '<span class="status-dot"></span><span class="status-text">Disconnected</span>';
         }
     }
     
@@ -142,7 +138,7 @@ class BondlinkDashboard {
     
     updateStats(wanInterfaces) {
         document.getElementById('activeLinks').textContent = wanInterfaces.total;
-        document.getElementById('healthyInterfaces').textContent = wanInterfaces.healthy;
+        document.getElementById('healthyInterfaces').textContent = `${wanInterfaces.healthy} / ${wanInterfaces.total}`;
     }
     
     setupCharts() {
@@ -154,8 +150,8 @@ class BondlinkDashboard {
     }
     
     updateCharts() {
-        this.drawChart(this.uploadChart, this.uploadHistory, '#f59e0b', '#ef4444');
-        this.drawChart(this.downloadChart, this.downloadHistory, '#10b981', '#3b82f6');
+        this.drawChart(this.uploadChart, this.uploadHistory, '#7AC943', '#68B336');
+        this.drawChart(this.downloadChart, this.downloadHistory, '#FF6B35', '#E85A2B');
     }
     
     drawChart(ctx, data, colorStart, colorEnd) {
@@ -174,7 +170,7 @@ class BondlinkDashboard {
         
         // Create gradient
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, colorStart + '40');
+        gradient.addColorStop(0, colorStart + '60');
         gradient.addColorStop(1, colorEnd + '10');
         
         // Draw area
@@ -205,7 +201,9 @@ class BondlinkDashboard {
         });
         
         ctx.strokeStyle = colorStart;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.stroke();
     }
     
@@ -226,57 +224,77 @@ class BondlinkDashboard {
         
         document.getElementById('totalPacketsSent').textContent = this.formatNumber(totalPacketsSent);
         document.getElementById('totalPacketsRecv').textContent = this.formatNumber(totalPacketsRecv);
+        document.getElementById('totalPackets').textContent = this.formatNumber(totalPacketsSent + totalPacketsRecv);
     }
     
     createInterfaceCard(iface) {
         const card = document.createElement('div');
-        card.className = `interface-card status-${iface.status}`;
+        card.className = `interface-card ${iface.enabled ? 'active' : ''}`;
         card.id = `interface-${iface.name}`;
         
-        const statusClass = iface.health.is_healthy ? 'good' : 'bad';
-        const latencyClass = iface.health.latency_ms < 50 ? 'good' : 
-                            iface.health.latency_ms < 100 ? 'warning' : 'bad';
+        const healthStatus = iface.health.is_healthy ? 'healthy' : 
+                           iface.health.packet_loss > 10 ? 'down' : 'degraded';
         
         card.innerHTML = `
             <div class="interface-header">
-                <div class="interface-name">${iface.name}</div>
-                <label class="interface-toggle">
+                <div class="interface-title-section">
+                    <div class="interface-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <rect x="2" y="5" width="20" height="14" rx="2" stroke-width="2.5"/>
+                            <line x1="8" y1="2" x2="8" y2="5" stroke-width="2.5"/>
+                            <line x1="16" y1="2" x2="16" y2="5" stroke-width="2.5"/>
+                            <circle cx="7" cy="10" r="1" fill="currentColor"/>
+                            <circle cx="12" cy="10" r="1" fill="currentColor"/>
+                            <circle cx="17" cy="10" r="1" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="interface-title-info">
+                        <h3>${iface.name}</h3>
+                        <div class="interface-subtitle">${iface.interface}</div>
+                    </div>
+                </div>
+                <label class="toggle-switch">
                     <input type="checkbox" ${iface.enabled ? 'checked' : ''} 
                            onchange="dashboard.toggleInterface('${iface.name}', this.checked)">
                     <span class="toggle-slider"></span>
                 </label>
             </div>
             
-            <div class="interface-status ${iface.status}">
-                <span>●</span> ${iface.status.toUpperCase()}
-                ${iface.tunnel_connected ? ' • Tunnel Active' : ''}
+            <div class="interface-body">
+                <div class="interface-info-row">
+                    <span class="info-label">Status</span>
+                    <span class="health-status ${healthStatus}">
+                        <span class="health-dot"></span>
+                        ${healthStatus.toUpperCase()}
+                    </span>
+                </div>
+                <div class="interface-info-row">
+                    <span class="info-label">IP Address</span>
+                    <span class="info-value">${iface.ip_address || 'N/A'}</span>
+                </div>
+                <div class="interface-info-row">
+                    <span class="info-label">Latency</span>
+                    <span class="info-value">${iface.health.latency_ms.toFixed(0)} ms</span>
+                </div>
+                <div class="interface-info-row">
+                    <span class="info-label">Packet Loss</span>
+                    <span class="info-value">${iface.health.packet_loss.toFixed(1)}%</span>
+                </div>
             </div>
             
-            <div class="interface-stats">
-                <div class="stat-row">
-                    <span class="stat-label">Interface</span>
-                    <span class="stat-value">${iface.interface}</span>
+            <div class="speed-chart-container">
+                <div class="speed-label">Real-time Speed</div>
+                <div class="speed-values">
+                    <div class="speed-item">
+                        <div class="speed-item-label">Upload</div>
+                        <div class="speed-item-value upload" id="${iface.name}-upload">${iface.stats.send_rate_mbps.toFixed(2)} Mbps</div>
+                    </div>
+                    <div class="speed-item">
+                        <div class="speed-item-label">Download</div>
+                        <div class="speed-item-value download" id="${iface.name}-download">${iface.stats.recv_rate_mbps.toFixed(2)} Mbps</div>
+                    </div>
                 </div>
-                <div class="stat-row">
-                    <span class="stat-label">IP Address</span>
-                    <span class="stat-value">${iface.ip_address || 'N/A'}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Upload</span>
-                    <span class="stat-value">${iface.stats.send_rate_mbps.toFixed(2)} Mbps</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Download</span>
-                    <span class="stat-value">${iface.stats.recv_rate_mbps.toFixed(2)} Mbps</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Latency</span>
-                    <span class="stat-value ${latencyClass}">${iface.health.latency_ms.toFixed(0)} ms</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Packet Loss</span>
-                    <span class="stat-value ${statusClass}">${iface.health.packet_loss.toFixed(1)}%</span>
-                </div>
+                <canvas id="chart-${iface.name}" width="300" height="80"></canvas>
             </div>
         `;
         
@@ -288,24 +306,34 @@ class BondlinkDashboard {
             const card = document.getElementById(`interface-${iface.name}`);
             if (!card) return;
             
-            // Update status class
-            card.className = `interface-card status-${iface.status}`;
+            // Update card active state
+            if (iface.enabled) {
+                card.classList.add('active');
+            } else {
+                card.classList.remove('active');
+            }
             
-            // Update stats values
-            const stats = card.querySelector('.interface-stats');
-            const statValues = stats.querySelectorAll('.stat-value');
+            // Update health status
+            const healthStatus = iface.health.is_healthy ? 'healthy' : 
+                               iface.health.packet_loss > 10 ? 'down' : 'degraded';
+            const healthBadge = card.querySelector('.health-status');
+            if (healthBadge) {
+                healthBadge.className = `health-status ${healthStatus}`;
+                healthBadge.innerHTML = `<span class="health-dot"></span>${healthStatus.toUpperCase()}`;
+            }
             
-            statValues[1].textContent = `${iface.send_rate_mbps} Mbps`;
-            statValues[2].textContent = `${iface.recv_rate_mbps} Mbps`;
-            statValues[3].textContent = `${iface.latency_ms} ms`;
-            statValues[3].className = `stat-value ${iface.latency_ms < 50 ? 'good' : iface.latency_ms < 100 ? 'warning' : 'bad'}`;
-            statValues[4].textContent = `${iface.packet_loss}%`;
-            statValues[4].className = `stat-value ${iface.is_healthy ? 'good' : 'bad'}`;
+            // Update speed values
+            const uploadElem = document.getElementById(`${iface.name}-upload`);
+            const downloadElem = document.getElementById(`${iface.name}-download`);
+            if (uploadElem) uploadElem.textContent = `${iface.stats.send_rate_mbps.toFixed(2)} Mbps`;
+            if (downloadElem) downloadElem.textContent = `${iface.stats.recv_rate_mbps.toFixed(2)} Mbps`;
             
-            // Update status badge
-            const statusBadge = card.querySelector('.interface-status');
-            statusBadge.className = `interface-status ${iface.status}`;
-            statusBadge.innerHTML = `<span>●</span> ${iface.status.toUpperCase()} ${iface.tunnel_connected ? ' • Tunnel Active' : ''}`;
+            // Update latency and packet loss
+            const infoValues = card.querySelectorAll('.info-value');
+            if (infoValues.length >= 3) {
+                infoValues[1].textContent = `${iface.health.latency_ms.toFixed(0)} ms`;
+                infoValues[2].textContent = `${iface.health.packet_loss.toFixed(1)}%`;
+            }
         });
     }
     
